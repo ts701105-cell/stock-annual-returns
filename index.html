@@ -1,0 +1,394 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>逐年報酬試算</title>
+<meta name="description" content="輸入股票代號與投入日期，算出每個年度的報酬率、累積與年化報酬。">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=Noto+Serif+TC:wght@700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --bg:#f5f6f4; --panel:#ffffff; --ink:#1c2226; --muted:#5d676d; --line:#dde1dd;
+  --accent:#1f5f7a; --accent-soft:#e3eef2;
+  --up:#c8322b; --down:#1d8a4a; --up-soft:#fbe9e7; --down-soft:#e5f3ea;
+  --warn:#9a6a00;
+  --serif:"Noto Serif TC","Songti TC",serif;
+  --sans:"Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  color-scheme:dark;--bg:#12171a;--panel:#1a2125;--ink:#e6eaea;--muted:#98a3a8;--line:#2b353a;
+  --accent:#6fb4d0;--accent-soft:#1d3440;--up:#f0665c;--down:#4cc07a;--up-soft:#3a1f1d;--down-soft:#17301f;--warn:#e0b04a;}}
+:root[data-theme="dark"]{
+  color-scheme:dark;--bg:#12171a;--panel:#1a2125;--ink:#e6eaea;--muted:#98a3a8;--line:#2b353a;
+  --accent:#6fb4d0;--accent-soft:#1d3440;--up:#f0665c;--down:#4cc07a;--up-soft:#3a1f1d;--down-soft:#17301f;--warn:#e0b04a;}
+:root{color-scheme:light}
+[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.6;padding-inline:16px;padding-block:24px 48px}
+.wrap{max-width:920px;margin:0 auto;display:grid;gap:20px}
+h1{font-family:var(--serif);font-size:1.9rem;line-height:1.2;margin:0;text-wrap:balance}
+.lede{color:var(--muted);margin:4px 0 0;max-width:60ch}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px}
+.form{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;align-items:end}
+label{display:grid;gap:4px;font-size:.8rem;color:var(--muted);letter-spacing:.04em}
+input,select{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px 10px;min-width:0}
+input:focus-visible,select:focus-visible,button:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button{font:inherit;cursor:pointer;border-radius:6px;padding:9px 14px;border:1px solid var(--accent);background:var(--accent);color:var(--panel);font-weight:500}
+button.ghost{background:transparent;color:var(--accent)}
+.data{display:grid;gap:10px;margin-top:16px;padding-top:16px;border-top:1px dashed var(--line)}
+.data-head{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;justify-content:space-between}
+.src{font-size:.85rem;color:var(--muted)}
+.src b{color:var(--ink)}
+.drop{border:1.5px dashed var(--line);border-radius:8px;padding:14px;text-align:center;color:var(--muted);font-size:.9rem;transition:border-color .15s,background .15s}
+.drop.over{border-color:var(--accent);background:var(--accent-soft)}
+textarea{width:100%;box-sizing:border-box;min-height:90px;font:12px/1.5 var(--mono);color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+a{color:var(--accent)}
+.msg{font-size:.88rem;padding:8px 12px;border-radius:6px;background:var(--accent-soft)}
+.msg.err{background:var(--up-soft);color:var(--up)}
+.demo{display:inline-block;font-size:.72rem;letter-spacing:.06em;padding:2px 8px;border-radius:99px;background:var(--accent-soft);color:var(--accent);font-weight:500}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.stat{background:var(--panel);padding:14px 16px}
+.stat .k{font-size:.75rem;color:var(--muted);letter-spacing:.05em}
+.stat .v{font:500 1.35rem/1.3 var(--mono);font-variant-numeric:tabular-nums}
+.up{color:var(--up)} .down{color:var(--down)}
+.chart-box{overflow-x:auto}
+svg text{font-family:var(--mono);font-size:11px;fill:var(--muted)}
+.tbl-box{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+th,td{padding:9px 10px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
+th{font-size:.75rem;color:var(--muted);font-weight:500;letter-spacing:.05em}
+th:first-child,td:first-child{text-align:left}
+td{font-family:var(--mono);font-size:.9rem}
+td.y{font-family:var(--sans);font-weight:700}
+.tag{font-family:var(--sans);font-size:.7rem;font-weight:500;color:var(--warn);margin-left:6px}
+.pill{display:inline-block;min-width:74px;padding:2px 8px;border-radius:5px;text-align:right}
+.pill.up{background:var(--up-soft)} .pill.down{background:var(--down-soft)}
+.notes{font-size:.82rem;color:var(--muted);display:grid;gap:4px}
+.notes p{margin:0}
+h2{font-size:1rem;margin:0 0 10px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <h1>逐年報酬試算</h1>
+    <p class="lede">輸入股票代號與投入日期，算出從投入那天起每一個年度的報酬率、累積報酬與年化報酬。</p>
+  </header>
+
+  <section class="panel">
+    <form class="form" id="f">
+      <label for="tk">股票代號
+        <input id="tk" value="VOO" autocomplete="off" autocapitalize="characters" placeholder="例：AAPL、VOO、QQQ、2330">
+      </label>
+      <label for="dt">投入日期
+        <input id="dt" type="date" value="2019-03-15">
+      </label>
+      <label for="amt">投入金額（選填）
+        <input id="amt" type="number" min="0" step="1000" value="100000">
+      </label>
+      <label for="px">價格欄位
+        <select id="px">
+          <option value="adj">總報酬（股利再投入）</option>
+          <option value="close">只看股價漲跌</option>
+        </select>
+      </label>
+      <button type="submit" id="go">抓價並計算</button>
+    </form>
+
+    <div class="data">
+      <div class="data-head">
+        <div class="src" id="src">輸入代號後按「抓價並計算」，會用你的 Twelve Data API 金鑰自動抓歷史股價。</div>
+      </div>
+      <details id="keybox">
+        <summary style="cursor:pointer;font-size:.88rem;color:var(--muted)">Twelve Data API 金鑰 <span id="keyState"></span></summary>
+        <div style="display:grid;gap:8px;margin-top:10px">
+          <div class="row">
+            <input id="key" type="password" autocomplete="off" placeholder="貼上你的 API 金鑰" style="flex:1 1 240px">
+            <button type="button" class="ghost" id="saveKey">儲存</button>
+            <button type="button" class="ghost" id="clearKey">清除</button>
+          </div>
+          <div class="src">金鑰只存在你自己這台裝置的瀏覽器裡，不會上傳到 GitHub 或任何其他地方。還沒有金鑰？到 <a href="https://twelvedata.com/register" target="_blank" rel="noopener">twelvedata.com</a> 免費註冊，在 API Keys 頁面複製。</div>
+        </div>
+      </details>
+      <div id="msg" hidden></div>
+      <details id="manual">
+      <summary style="cursor:pointer;font-size:.88rem;color:var(--muted)">手動匯入股價（台股或抓不到資料時使用）</summary>
+      <div style="display:grid;gap:10px;margin-top:10px">
+      <div class="row"><a id="yl" href="#" target="_blank" rel="noopener">到 Yahoo Finance 下載歷史股價 ↗</a></div>
+      <div class="drop" id="drop">把歷史股價 CSV 拖到這裡，或 <label for="file" style="display:inline;color:var(--accent);cursor:pointer;letter-spacing:0;font-size:inherit">選擇檔案</label>
+        <input id="file" type="file" accept=".csv,.txt,text/csv" hidden>
+      </div>
+      <div class="src">或直接貼上表格（從網頁複製也可以）：</div>
+      <textarea id="paste" placeholder="Date,Open,High,Low,Close,Adj Close,Volume&#10;2019-01-02,...."></textarea>
+      <div><button type="button" class="ghost" id="usePaste">使用貼上的資料</button></div>
+      </div>
+      </details>
+    </div>
+  </section>
+
+  <section class="stats" id="stats"></section>
+
+  <section class="panel">
+    <h2>各年度報酬率 <span class="src" style="font-weight:400">（紅漲綠跌）</span></h2>
+    <div class="chart-box" id="chart"></div>
+  </section>
+
+  <section class="panel">
+    <div class="tbl-box"><table id="tbl"></table></div>
+  </section>
+
+  <section class="notes">
+    <p>計算方式：以投入日當天（遇假日則取下一個交易日）的收盤價買進。第一年從投入日算到該年最後交易日；之後每年以前一年最後收盤價對當年最後收盤價；最新一年算到資料最後一天。</p>
+    <p>「總報酬」會把每次除息的股利，以除息前一日收盤價再投入；股價已做分割調整。美股與美國 ETF 透過 Twelve Data API 自動取得；台股在 Twelve Data 需付費方案，免費方案請用下方手動匯入。</p>
+    <p>手動匯入時，「總報酬」採用資料中的 Adj Close 欄位；資料沒有這一欄時會改用收盤價。支援格式：Yahoo Finance 下載的 CSV、證交所／櫃買中心下載的 CSV（民國日期會自動轉換），或任何含「日期」與「收盤價」欄位的表格。</p>
+  </section>
+</div>
+
+<script>
+(function(){
+const $=id=>document.getElementById(id);
+let series=null; // {name, rows:[{d:Date, close, adj}], demo:bool}
+
+/* ---------- Twelve Data REST API (key kept in this browser only) ---------- */
+const KEY_NAME="td_api_key";
+function getKey(){ try{return localStorage.getItem(KEY_NAME)||"";}catch(e){return "";} }
+function setKey(v){ try{ v?localStorage.setItem(KEY_NAME,v):localStorage.removeItem(KEY_NAME); }catch(e){} }
+function showKeyState(){ const k=getKey(); $("keyState").textContent=k?"・已設定（…"+k.slice(-4)+"）":"・尚未設定"; $("keyState").style.color=k?"var(--muted)":"var(--up)"; }
+function isTW(tk){ return /^\d{4,6}[A-Z]?$/.test(tk) || /\.(TW|TWO)$/.test(tk); }
+async function api(path,params){
+  const u=new URL("https://api.twelvedata.com/"+path);
+  Object.entries(params).forEach(([k,v])=>{ if(v!=null&&v!=="") u.searchParams.set(k,v); });
+  u.searchParams.set("apikey",getKey());
+  let r;
+  try{ r=await fetch(u.toString()); }catch(e){ throw {ui:"連不上 Twelve Data，請檢查網路後再試一次。"}; }
+  let j; try{ j=await r.json(); }catch(e){ throw {ui:"Twelve Data 回傳的資料無法讀取（HTTP "+r.status+"）。"}; }
+  if(j&&j.status==="error"){ throw {code:j.code,msg:j.message||""}; }
+  return j;
+}
+function tdError(e,tk,tw){
+  const m=(e&&e.msg)||"";
+  if(e&&e.code===401) return {ui:"API 金鑰無效。請到上方「Twelve Data API 金鑰」重新貼上正確的金鑰。",key:true};
+  if(e&&e.code===429) return {ui:"已超過 Twelve Data 免費方案的查詢次數（每分鐘 8 次、每天 800 次）。請等一分鐘後再試。"};
+  if((e&&e.code===403)||/upgrad|Pro|Venture|Grow|pricing|plan/i.test(m)) return {ui:(tw?"台股":"這個代號")+"在 Twelve Data 需要付費方案才能查詢。請改用下方手動匯入股價，或升級 Twelve Data 方案。",manual:true};
+  if((e&&e.code===400)||/not found|invalid|symbol/i.test(m)) return {ui:"Twelve Data 找不到代號「"+tk+"」。美股請直接輸入代號（如 AAPL、VOO）；指數請用 ETF 代替（S&P 500 → SPY、那斯達克 100 → QQQ）。"};
+  return e&&e.ui?e:{ui:"抓價失敗："+(m||"未知錯誤")+"。可稍後再試或改用下方手動匯入。"};
+}
+async function fetchSeries(tk,startStr){
+  if(!getKey()) throw {ui:"請先在上方「Twelve Data API 金鑰」貼上你的金鑰（免費註冊即可取得）。",key:true};
+  const tw=isTW(tk); const sym=tk.replace(/\.(TW|TWO)$/,"");
+  const yrs=(new Date()-new Date(startStr))/3.15576e10;
+  const interval=yrs>19?"1week":"1day";
+  const p={symbol:sym,interval,start_date:startStr,outputsize:5000,order:"ASC",format:"JSON"};
+  if(tw) p.country="Taiwan";
+  let ts; try{ ts=await api("time_series",p); }catch(e){ throw tdError(e,tk,tw); }
+  const rows=(ts.values||[]).map(v=>({d:parseDate(v.datetime),close:Number(v.close)})).filter(r=>r.d&&r.close>0);
+  if(rows.length<2) throw {ui:"從投入日期之後找不到足夠的股價資料。"};
+  rows.sort((a,b)=>a.d-b.d);
+  let divs=[], divNote="";
+  try{
+    const dp={symbol:sym,start_date:startStr}; if(tw) dp.country="Taiwan";
+    const j=await api("dividends",dp);
+    divs=(j.dividends||[]).map(x=>({d:parseDate(x.ex_date),a:Number(x.amount)})).filter(x=>x.d&&x.a>0).sort((a,b)=>a.d-b.d);
+  }catch(e){ divNote="（未取得股利資料，總報酬以股價計算）"; }
+  let f=1,k=0; while(k<divs.length&&divs[k].d<=rows[0].d) k++;
+  rows[0].adj=rows[0].close;
+  for(let i=1;i<rows.length;i++){
+    while(k<divs.length&&divs[k].d<=rows[i].d){ f*=1+divs[k].a/rows[i-1].close; k++; }
+    rows[i].adj=rows[i].close*f;
+  }
+  return {name:tk,rows,hasAdj:!divNote,demo:false,live:true,interval,divCount:divs.length,divNote};
+}
+async function fetchAndRender(){
+  const tk=$("tk").value.trim().toUpperCase(); const ds=$("dt").value;
+  if(!tk){showMsg("請輸入股票代號。",true);return}
+  if(!ds){showMsg("請輸入投入日期。",true);return}
+  const btn=$("go"); btn.disabled=true; btn.textContent="抓價中…";
+  showMsg("正在從 Twelve Data 取得 "+tk+" 的歷史股價與股利…",false);
+  try{ series=await fetchSeries(tk,ds); showMsg("",false); render(); }
+  catch(e){ series=null; clearOut(); showMsg(e&&e.ui?e.ui:"抓價失敗，請再試一次。",true); if(e&&e.manual) $("manual").open=true; if(e&&e.key){ $("keybox").open=true; $("key").focus(); } }
+  finally{ btn.disabled=false; btn.textContent="抓價並計算"; }
+}
+
+/* ---------- parsing ---------- */
+function splitLine(line,delim){
+  const out=[];let cur="",q=false;
+  for(let i=0;i<line.length;i++){const c=line[i];
+    if(c==='"'){ if(q&&line[i+1]==='"'){cur+='"';i++;} else q=!q; }
+    else if(c===delim&&!q){out.push(cur);cur="";}
+    else cur+=c;}
+  out.push(cur);return out.map(x=>x.trim());
+}
+function num(v){ if(v==null) return NaN; v=String(v).replace(/[,\s$]/g,""); if(v===""||v==="--"||v==="-"||v==="null") return NaN; return Number(v); }
+const MON={jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11};
+function parseDate(v){
+  v=String(v).trim().replace(/"/g,""); let m;
+  if(m=v.match(/^(\d{2,4})[-\/.年](\d{1,2})[-\/.月](\d{1,2})/)){
+    let y=+m[1]; if(y<1911) y+=1911;
+    return new Date(Date.UTC(y,+m[2]-1,+m[3]));
+  }
+  if(m=v.match(/^([A-Za-z]{3})[a-z]*\.?\s+(\d{1,2}),?\s+(\d{4})/)){
+    const mo=MON[m[1].toLowerCase()]; if(mo!=null) return new Date(Date.UTC(+m[3],mo,+m[2]));
+  }
+  if(m=v.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/)) return new Date(Date.UTC(+m[3],+m[1]-1,+m[2]));
+  return null;
+}
+function parseTable(text){
+  const lines=text.replace(/\r/g,"").split("\n").filter(l=>l.trim());
+  if(!lines.length) throw new Error("沒有讀到任何資料。");
+  let hi=-1,delim=",",hdr=null;
+  for(let i=0;i<Math.min(lines.length,15);i++){
+    const l=lines[i]; const d=l.includes("\t")?"\t":(l.includes(",")?",":(l.includes(";")?";":","));
+    const cells=splitLine(l,d).map(c=>c.toLowerCase().replace(/[*\s]/g,""));
+    if(cells.some(c=>/^(date|日期|交易日期|年月日)$/.test(c))){hi=i;delim=d;hdr=cells;break;}
+  }
+  if(hi<0) throw new Error("找不到「Date／日期」欄位。請確認第一列是欄位名稱。");
+  const di=hdr.findIndex(c=>/^(date|日期|交易日期|年月日)$/.test(c));
+  const ai=hdr.findIndex(c=>/^(adjclose|adj\.close|adjustedclose|還原收盤價|調整後收盤價)/.test(c));
+  let ci=hdr.findIndex(c=>/^(close|收盤價|收盤|price)$/.test(c));
+  if(ci<0) ci=hdr.findIndex(c=>/^close/.test(c)&&!/adj/.test(c));
+  if(ci<0&&ai<0) throw new Error("找不到收盤價欄位（Close／收盤價）。");
+  const rows=[];
+  for(let i=hi+1;i<lines.length;i++){
+    const c=splitLine(lines[i],delim); const d=parseDate(c[di]); if(!d||isNaN(d)) continue;
+    const close=ci>=0?num(c[ci]):NaN, adj=ai>=0?num(c[ai]):NaN;
+    if(!(close>0)&&!(adj>0)) continue;
+    rows.push({d,close:close>0?close:adj,adj:adj>0?adj:close});
+  }
+  if(rows.length<2) throw new Error("可用的資料列太少，請檢查格式。");
+  rows.sort((a,b)=>a.d-b.d);
+  const dedup=rows.filter((r,i)=>i===0||+r.d!==+rows[i-1].d);
+  return {rows:dedup,hasAdj:ai>=0};
+}
+
+/* ---------- compute ---------- */
+function compute(s,start,useAdj){
+  const key=useAdj&&s.hasAdj?"adj":"close";
+  const rows=s.rows; const first=rows.findIndex(r=>r.d>=start);
+  if(first<0) throw new Error("投入日期晚於資料的最後一天（"+fmtD(rows[rows.length-1].d)+"）。");
+  const buy=rows[first]; const lastRow=rows[rows.length-1];
+  const years=[]; let begin=buy[key], beginDate=buy.d;
+  const y0=buy.d.getUTCFullYear(), y1=lastRow.d.getUTCFullYear();
+  for(let y=y0;y<=y1;y++){
+    let endRow=null; for(let i=rows.length-1;i>=first;i--){ if(rows[i].d.getUTCFullYear()===y){endRow=rows[i];break;} }
+    if(!endRow) continue;
+    const r=endRow[key]/begin-1;
+    const partialStart=y===y0 && !(buy.d.getUTCMonth()===0&&buy.d.getUTCDate()<=7);
+    const partialEnd=y===y1 && !(endRow.d.getUTCMonth()===11&&endRow.d.getUTCDate()>=24);
+    years.push({y,from:beginDate,to:endRow.d,p0:begin,p1:endRow[key],r,partialStart,partialEnd});
+    begin=endRow[key]; beginDate=endRow.d;
+  }
+  const cum=lastRow[key]/buy[key]-1;
+  const days=(lastRow.d-buy.d)/864e5;
+  const cagr=days>0?Math.pow(1+cum,365.25/days)-1:0;
+  const full=years.filter(x=>!x.partialStart&&!x.partialEnd);
+  const pos=years.filter(x=>x.r>0).length;
+  return {years,cum,cagr,days,buy,lastRow,key,full,pos};
+}
+
+/* ---------- render ---------- */
+const fmtD=d=>d.toISOString().slice(0,10);
+const pct=(x,d=2)=>(x>0?"+":"")+(x*100).toFixed(d)+"%";
+const cls=x=>x>0?"up":(x<0?"down":"");
+const money=x=>Math.round(x).toLocaleString("zh-TW");
+function priceFmt(p){return p>=1000?p.toLocaleString("zh-TW",{maximumFractionDigits:1}):p.toFixed(2)}
+
+function showMsg(t,err){const m=$("msg");m.hidden=!t;m.className="msg"+(err?" err":"");m.textContent=t||"";}
+
+function render(){
+  const tk=$("tk").value.trim().toUpperCase();
+  updateLink(tk);
+  if(!series){return}
+  const start=new Date($("dt").value+"T00:00:00Z");
+  if(isNaN(start)){showMsg("請輸入有效的投入日期。",true);return}
+  let res; try{res=compute(series,start,$("px").value==="adj");}catch(e){showMsg(e.message,true);clearOut();return}
+  const amt=Number($("amt").value)||0;
+  const nm='<b>'+esc(series.name)+'</b>'+(series.live?'（Twelve Data API'+(series.interval==="1week"?'・週線':'')+'，股利 '+series.divCount+' 筆'+esc(series.divNote||"")+'）':'（手動匯入）');
+  $("src").innerHTML='資料：'+nm+' ・ '+fmtD(series.rows[0].d)+' 至 '+fmtD(series.rows[series.rows.length-1].d)+' ・ 共 '+series.rows.length.toLocaleString()+' 筆'+(series.hasAdj?'':' ・ 無股利資料，使用收盤價');
+  const notes=[];
+  if(res.buy.d>start) notes.push("投入日非交易日，已改用 "+fmtD(res.buy.d)+" 的收盤價。");
+  if(series.live&&series.interval==="1week") notes.push("投入超過 19 年，改用週收盤價計算。");
+  showMsg(notes.join(" "),false);
+
+  const best=res.years.reduce((a,b)=>b.r>a.r?b:a), worst=res.years.reduce((a,b)=>b.r<a.r?b:a);
+  const stats=[
+    ["累積報酬",pct(res.cum),cls(res.cum)],
+    ["年化報酬（CAGR）",pct(res.cagr),cls(res.cagr)],
+    amt?["期末價值",money(amt*(1+res.cum)),""]:["持有天數",Math.round(res.days).toLocaleString()+" 天",""],
+    ["最佳年度",best.y+"　"+pct(best.r,1),cls(best.r)],
+    ["最差年度",worst.y+"　"+pct(worst.r,1),cls(worst.r)],
+    ["上漲年數",res.pos+" / "+res.years.length,""]
+  ];
+  $("stats").innerHTML=stats.map(s=>'<div class="stat"><div class="k">'+s[0]+'</div><div class="v '+s[2]+'">'+s[1]+'</div></div>').join("");
+  drawChart(res.years);
+  let val=amt, cumF=1;
+  const head='<tr><th>年度</th><th>期間</th><th>起始價</th><th>期末價</th><th>年度報酬率</th><th>累積報酬</th>'+(amt?'<th>年底價值</th>':'')+'</tr>';
+  const body=res.years.map(x=>{
+    cumF*=1+x.r; val=amt*cumF;
+    const tag=x.partialStart?'<span class="tag">部分年度</span>':(x.partialEnd?'<span class="tag">年初至今</span>':'');
+    return '<tr><td class="y">'+x.y+tag+'</td><td>'+fmtD(x.from).slice(5)+' → '+fmtD(x.to).slice(5)+'</td><td>'+priceFmt(x.p0)+'</td><td>'+priceFmt(x.p1)+'</td><td><span class="pill '+cls(x.r)+'"><span class="'+cls(x.r)+'">'+pct(x.r)+'</span></span></td><td class="'+cls(cumF-1)+'">'+pct(cumF-1)+'</td>'+(amt?'<td>'+money(val)+'</td>':'')+'</tr>';
+  }).join("");
+  $("tbl").innerHTML='<thead>'+head+'</thead><tbody>'+body+'</tbody>';
+}
+function clearOut(){$("stats").innerHTML="";$("chart").innerHTML="";$("tbl").innerHTML="";}
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]))}
+
+function niceStep(range){const raw=range/5;const p=Math.pow(10,Math.floor(Math.log10(raw)));const n=raw/p;return (n<1.5?1:n<3.5?2:n<7.5?5:10)*p;}
+function drawChart(ys){
+  const n=ys.length, W=Math.max(560,n*64+70), H=260, L=52, R=12, T=22, B=34;
+  let lo=Math.min(0,...ys.map(y=>y.r)), hi=Math.max(0,...ys.map(y=>y.r));
+  if(hi-lo<.05){hi+=.025;lo-=.025}
+  const st=niceStep(hi-lo); lo=Math.floor(lo/st)*st; hi=Math.ceil(hi/st)*st;
+  const sy=v=>T+(hi-v)/(hi-lo)*(H-T-B); const bw=(W-L-R)/n;
+  let g="";
+  for(let v=lo;v<=hi+1e-9;v+=st){const y=sy(v);g+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+y+'" y2="'+y+'" stroke="var(--line)" stroke-width="1"/><text x="'+(L-8)+'" y="'+(y+4)+'" text-anchor="end">'+Math.round(v*100)+'%</text>';}
+  g+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+sy(0)+'" y2="'+sy(0)+'" stroke="var(--muted)" stroke-width="1.2"/>';
+  ys.forEach((x,i)=>{
+    const cx=L+bw*i+bw/2, w=Math.min(40,bw*.62), y=sy(Math.max(0,x.r)), h=Math.abs(sy(x.r)-sy(0));
+    const col=x.r>=0?"var(--up)":"var(--down)"; const part=x.partialStart||x.partialEnd;
+    g+='<rect x="'+(cx-w/2)+'" y="'+y+'" width="'+w+'" height="'+Math.max(1,h)+'" rx="2" fill="'+col+'" fill-opacity="'+(part?.45:.9)+'"'+(part?' stroke="'+col+'" stroke-dasharray="3 2"':'')+'><title>'+x.y+'：'+pct(x.r)+'</title></rect>';
+    const ly=x.r>=0?y-6:y+h+13;
+    g+='<text x="'+cx+'" y="'+ly+'" text-anchor="middle" style="fill:'+col+'">'+pct(x.r,1)+'</text>';
+    g+='<text x="'+cx+'" y="'+(H-12)+'" text-anchor="middle">'+x.y+(part?'*':'')+'</text>';
+  });
+  $("chart").innerHTML='<svg viewBox="0 0 '+W+' '+H+'" width="100%" style="min-width:'+Math.min(W,560)+'px;max-width:'+W+'px" role="img" aria-label="各年度報酬率長條圖">'+g+'</svg><div class="src" style="font-size:.78rem">* 虛線淡色為不滿一年的部分年度</div>';
+}
+
+function yahooSym(tk){ if(/^\d{4,6}[A-Z]?$/.test(tk)) return tk+".TW"; return tk; }
+function updateLink(tk){
+  const sym=yahooSym(tk||"0050");
+  $("yl").href="https://finance.yahoo.com/quote/"+encodeURIComponent(sym)+"/history/";
+  $("yl").textContent="到 Yahoo Finance 下載 "+sym+" 歷史股價 ↗";
+}
+
+function load(text,name){
+  try{const p=parseTable(text);series={name:name||$("tk").value.trim().toUpperCase(),rows:p.rows,hasAdj:p.hasAdj,demo:false};render();}
+  catch(e){showMsg(e.message,true)}
+}
+$("f").addEventListener("submit",e=>{e.preventDefault();
+  const tk=$("tk").value.trim().toUpperCase();
+  if(series&&series.live&&series.name===tk&&series.rows[0].d<=new Date($("dt").value+"T00:00:00Z")) render(); else fetchAndRender();
+});
+["amt","px"].forEach(id=>$(id).addEventListener("change",render));
+$("dt").addEventListener("change",()=>{ if(series&&!series.live) render(); });
+$("tk").addEventListener("input",()=>updateLink($("tk").value.trim().toUpperCase()));
+$("file").addEventListener("change",e=>{const f=e.target.files[0];if(f)readFile(f)});
+function readFile(f){const r=new FileReader();r.onload=()=>load(r.result,($("tk").value.trim().toUpperCase()||f.name.replace(/\.\w+$/,"")));r.readAsText(f);}
+const drop=$("drop");
+["dragenter","dragover"].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add("over")}));
+["dragleave","drop"].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove("over")}));
+drop.addEventListener("drop",e=>{const f=e.dataTransfer.files[0];if(f)readFile(f)});
+$("usePaste").addEventListener("click",()=>load($("paste").value));
+
+$("saveKey").addEventListener("click",()=>{ const v=$("key").value.trim(); if(!v){showMsg("請先貼上金鑰。",true);return} setKey(v); $("key").value=""; showKeyState(); $("keybox").open=false; showMsg("金鑰已儲存在這台裝置。",false); fetchAndRender(); });
+$("clearKey").addEventListener("click",()=>{ setKey(""); $("key").value=""; showKeyState(); showMsg("金鑰已從這台裝置清除。",false); });
+updateLink($("tk").value.trim().toUpperCase());
+showKeyState();
+if(getKey()) fetchAndRender(); else { $("keybox").open=true; showMsg("第一次使用：請先貼上你的 Twelve Data API 金鑰，儲存後會自動計算。",false); }
+})();
+</script>
+</body>
+</html>
