@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>股票年度報酬率計算器</title>
+<style>
+body{font-family:-apple-system,"PingFang TC","Microsoft JhengHei",sans-serif;max-width:860px;margin:32px auto;padding:0 16px;color:#222}
+h1{font-size:24px}
+form{display:flex;gap:10px;flex-wrap:wrap;align-items:end;background:#f5f7fa;padding:16px;border-radius:10px}
+label{display:flex;flex-direction:column;font-size:13px;color:#555;gap:4px}
+input{font-size:16px;padding:8px 10px;border:1px solid #ccd;border-radius:6px}
+button{font-size:16px;padding:9px 18px;border:0;border-radius:6px;background:#2563eb;color:#fff;cursor:pointer}
+button:disabled{opacity:.6}
+.wrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;margin-top:16px;font-size:15px}
+th,td{padding:8px 10px;border-bottom:1px solid #e5e7eb;text-align:right;white-space:nowrap}
+th:first-child,td:first-child{text-align:left}
+th{background:#f5f7fa}
+.pos{color:#d32f2f}.neg{color:#2e7d32}
+.sum{margin-top:16px;line-height:1.8}
+.err{color:#b00020;margin-top:14px}
+.note{font-size:12px;color:#777;margin-top:18px;line-height:1.6}
+</style>
+</head>
+<body>
+<h1>股票年度報酬率計算器</h1>
+<form id="f">
+  <label>股票代號<input id="s" placeholder="例如 2330、0050、AAPL" required></label>
+  <label>投入日期<input id="d" type="date" required></label>
+  <button id="btn">計算</button>
+</form>
+<div id="out"></div>
+<p class="note">「含息報酬」假設股利全部再投入，「價格報酬」只看股價漲跌（已處理分割）。第一年從投入日算到該年最後一個交易日，之後每年從前一年最後收盤算到當年最後收盤，今年算到最新收盤。台股輸入數字代號（上市、上櫃、ETF 皆可），美股輸入英文代號。資料來源為 FinMind 公開資料，免金鑰，但同一個網路每小時有查詢次數上限。結果僅供參考，不構成投資建議。</p>
+<script>
+const API = 'https://api.finmindtrade.com/api/v4/data';
+const $ = id => document.getElementById(id);
+
+async function fm(dataset, id, start) {
+  const q = new URLSearchParams({dataset, data_id: id});
+  if (start) q.set('start_date', start);
+  const r = await fetch(`${API}?${q}`);
+  const j = await r.json();
+  if (j.status !== 200) throw new Error(j.msg && j.msg.includes('limit') ? '查詢次數暫時達到上限，請稍後再試' : (j.msg || '資料來源錯誤'));
+  return j.data || [];
+}
+
+function shift(dateStr, days) {
+  const t = new Date(dateStr + 'T00:00:00Z'); t.setUTCDate(t.getUTCDate() + days);
+  return t.toISOString().slice(0, 10);
+}
+
+// 回傳 [{date, price, tr}]：price 為分割調整後價格，tr 為含息總報酬指數
+async function loadTW(id, start) {
+  const from = shift(start, -10);
+  const [px, div, split, info] = await Promise.all([
+    fm('TaiwanStockPrice', id, from),
+    fm('TaiwanStockDividendResult', id, from),
+    fm('TaiwanStockSplitPrice', id, from),
+    fm('TaiwanStockInfo', id).catch(() => [])
+  ]);
+  if (!px.length) return null;
+  const splitF = {}, allF = {};
+  for (const e of split) if (e.before_price > 0 && e.after_price > 0) {
+    const f = e.before_price / e.after_price;
+    splitF[e.date] = (splitF[e.date] || 1) * f; allF[e.date] = (allF[e.date] || 1) * f;
+  }
+  for (const e of div) if (e.before_price > 0 && e.after_price > 0)
+    allF[e.date] = (allF[e.date] || 1) * (e.before_price / e.after_price);
+  let sAcc = 1, aAcc = 1; const rows = [];
+  for (const r of px) {
+    if (!(r.close > 0)) continue;
+    if (splitF[r.date]) sAcc *= splitF[r.date];
+    if (allF[r.date]) aAcc *= allF[r.date];
+    rows.push({date: r.date, raw: r.close, price: r.close * sAcc, tr: r.close * aAcc});
+  }
+  const name = info.length ? info[0].stock_name : id;
+  return {rows, name, currency: 'TWD', symbol: id};
+}
+
+async function loadUS(id, start) {
+  const [px, info] = await Promise.all([
+    fm('USStockPrice', id, shift(start, -10)),
+    fm('USStockInfo', id).catch(() => [])
+  ]);
+  if (!px.length) return null;
+  const rows = px.filter(r => r.Close > 0 && r.Adj_Close > 0)
+                 .map(r => ({date: r.date, raw: r.Close, price: r.Close, tr: r.Adj_Close}));
+  return {rows, name: info.length ? info[0].stock_name : id, currency: 'USD', symbol: id};
+}
+
+function compute(data, start) {
+  let rows = data.rows.filter(r => r.date >= start);
+  if (rows.length < 2) throw new Error('投入日期之後的交易資料不足');
+  const years = []; let base = rows[0]; const byYear = new Map();
+  for (const r of rows) { const y = r.date.slice(0, 4); if (!byYear.has(y)) byYear.set(y, []); byYear.get(y).push(r); }
+  for (const [y, list] of byYear) {
+    const end = list[list.length - 1];
+    years.push({year: y, from: base.date, to: end.date, startPrice: base.raw, endPrice: end.raw,
+      priceReturn: end.price / base.price - 1, totalReturn: end.tr / base.tr - 1});
+    base = end;
+  }
+  const first = rows[0], last = rows[rows.length - 1];
+  const yrs = (new Date(last.date) - new Date(first.date)) / (365.25 * 864e5);
+  const cumTotal = last.tr / first.tr - 1;
+  return {years, firstDate: first.date, lastDate: last.date,
+    cumPrice: last.price / first.price - 1, cumTotal,
+    cagr: yrs >= 1 ? Math.pow(1 + cumTotal, 1 / yrs) - 1 : null};
+}
+
+const pct = v => v == null ? '—' : `<span class="${v >= 0 ? 'pos' : 'neg'}">${(v * 100).toFixed(2)}%</span>`;
+const num = v => v.toLocaleString(undefined, {maximumFractionDigits: 2});
+
+async function run() {
+  const out = $('out'); const btn = $('btn');
+  let sym = $('s').value.trim().toUpperCase().replace(/\.(TW|TWO)$/, '');
+  const start = $('d').value;
+  if (!sym || !start) return;
+  out.textContent = '計算中…'; btn.disabled = true;
+  try {
+    const isTW = /^\d{4,6}[A-Z]?$/.test(sym);
+    const data = isTW ? await loadTW(sym, start) : await loadUS(sym, start);
+    if (!data) throw new Error(`找不到 ${sym} 的資料，請確認代號是否正確`);
+    const r = compute(data, start);
+    let h = `<div class="sum"><b>${data.name}</b>（${data.symbol}，${data.currency}）<br>期間 ${r.firstDate} 到 ${r.lastDate}<br>累積含息報酬 ${pct(r.cumTotal)}，累積價格報酬 ${pct(r.cumPrice)}，年化含息報酬 ${pct(r.cagr)}</div>`;
+    h += '<div class="wrap"><table><tr><th>年度</th><th>區間</th><th>起始價</th><th>結束價</th><th>價格報酬</th><th>含息報酬</th></tr>';
+    for (const y of r.years) h += `<tr><td>${y.year}</td><td>${y.from.slice(5)} ~ ${y.to.slice(5)}</td><td>${num(y.startPrice)}</td><td>${num(y.endPrice)}</td><td>${pct(y.priceReturn)}</td><td>${pct(y.totalReturn)}</td></tr>`;
+    out.innerHTML = h + '</table></div>';
+    history.replaceState(null, '', `?symbol=${encodeURIComponent(sym)}&date=${start}`);
+  } catch (e) {
+    out.innerHTML = `<div class="err">${e.message}</div>`;
+  } finally { btn.disabled = false; }
+}
+
+$('d').value = new Date(Date.now() - 5 * 365 * 864e5).toISOString().slice(0, 10);
+$('f').addEventListener('submit', e => { e.preventDefault(); run(); });
+const P = new URLSearchParams(location.search);
+if (P.get('symbol')) { $('s').value = P.get('symbol'); if (P.get('date')) $('d').value = P.get('date'); run(); }
+</script>
+</body>
+</html>
